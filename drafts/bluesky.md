@@ -1,5 +1,6 @@
-<!-- DRAFT. Do not post until the repo and the live app are up.
-     Bluesky limit is 300 characters. Counted below, after you fill the two links. -->
+<!-- Record of the announcement post, already live at
+     https://bsky.app/profile/iammzee.bsky.social/post/3n27ulws2gk2i
+     Do not post this again, and do not post it on X; the contest does not count X. -->
 
 ## Bluesky (keep to 300 characters once the links are in)
 
@@ -9,9 +10,9 @@ https://mzee04.github.io/stake/
 https://github.com/Mzee04/stake
 
 <!--
-Counted 13 Nov 2026: the post body above is 256 characters, including the two
-links and the blank line between the paragraph and the URLs (em-dash counts
-as one). Limit is 300, so 44 characters of room. Recheck in the Bluesky
-compose box before posting, in case Bluesky counts a URL differently.
-Do not post this on X; the contest does not count X.
+Counted 13 Nov 2026: the paragraph alone is 191 characters (the em dash
+counts as one). With the two GitHub URLs and the blank line between the
+paragraph and the links, the whole post is 256 characters. Limit is 300.
+The live post is at:
+https://bsky.app/profile/iammzee.bsky.social/post/3n27ulws2gk2i
 -->

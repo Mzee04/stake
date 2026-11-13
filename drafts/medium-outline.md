@@ -19,3 +19,6 @@
 6. **What I am not claiming.** No automatic evidence. No guarantee the referee is honest, or that they will answer. If you name yourself, it’s a delayed refund button. A share link that includes the goal is as private as you keep it.
 
 Close with the two links, and that it was built for the Tari November MVP contest. No call to “join the revolution.”
+
+- App: https://mzee04.github.io/stake/
+- Code: https://github.com/Mzee04/stake

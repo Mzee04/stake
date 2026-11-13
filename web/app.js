@@ -65,10 +65,14 @@ function encodeStake(stake, { includeGoal } = { includeGoal: true }) {
   return toB64url(new TextEncoder().encode(JSON.stringify(o)));
 }
 function decodeStake(b64) {
-  const json = new TextDecoder().decode(fromB64url(b64));
-  const s = JSON.parse(json);
-  if (!s || s.v !== 1 || !s.goalHash) throw new Error("that link is not a Stake");
-  return s;
+  try {
+    const json = new TextDecoder().decode(fromB64url(b64));
+    const s = JSON.parse(json);
+    if (!s || s.v !== 1 || !s.goalHash) throw new Error("not a stake");
+    return s;
+  } catch {
+    throw new Error("This link is not a valid Stake.");
+  }
 }
 function originPath() {
   return `${location.origin}${location.pathname}`.replace(/index\.html$/, "");
@@ -185,7 +189,14 @@ function route() {
       const asReferee = parts[2] === "rule";
       renderStake(stake, { asReferee, packed: parts[1] });
     } catch (e) {
-      $("#stake-root").innerHTML = `<p class="form-error">This link could not be opened. ${esc(e.message)}</p>`;
+      const msg = (e && e.message) || "This link is not a valid Stake.";
+      $("#stake-root").innerHTML = `<div class="contract">
+        <header class="page-head">
+          <h1>This link is not a valid Stake.</h1>
+          <p>The address looks like a stake link, but the data in it could not be read. It may have been copied only in part, or it is not a Stake URL. Please check the full link, or <a href="#/new">open a new stake</a>.</p>
+        </header>
+        <p class="form-error">${esc(msg)}</p>
+      </div>`;
     }
     return;
   }
@@ -202,7 +213,7 @@ function prepareForm() {
 }
 
 $("#fill-sample").addEventListener("click", () => {
-  $("#goal").value = "Run a 5k before the year ends.";
+  $("#goal").value = KNOWN_VECTOR.goal;
   $("#amount").value = "50";
   $("#referee").value = "Ada, a friend";
   $("#sink").value = "The local food bank";
@@ -216,8 +227,8 @@ $("#create-form").addEventListener("submit", async (ev) => {
   const err = $("#create-error");
   err.hidden = true;
   try {
-    const goal = $("#goal").value;
-    if (!goal.trim()) throw new Error("Write a goal first. It stays off the chain.");
+    const goal = $("#goal").value.trim();
+    if (!goal) throw new Error("Write a goal first. It stays off the chain.");
     if (goal.length > 500) throw new Error("Keep the goal to 500 characters so a share link stays short.");
     const amount = Number($("#amount").value);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("The amount has to be greater than zero.");
@@ -273,7 +284,7 @@ function renderStake(s, { asReferee } = {}) {
       : Promise.resolve(null);
 
   hashOkPromise.then((hashOk) => {
-    const stampClass = s.status;
+    const stampClass = s.status === "open" ? "locked" : s.status;
     const stampWord = STAMP[s.status] || s.status;
     const timeout = timeoutAt(s);
 
@@ -313,15 +324,15 @@ function renderStake(s, { asReferee } = {}) {
           <h2>${asReferee ? "Your ruling" : "Referee’s ruling"}</h2>
           ${
             canRule(s, t)
-              ? `<p>${
-                  asReferee
-                    ? "You are the referee. The chain — and this simulation — will follow your call. You can lie. Please don’t, unless that’s a conversation you’ve already had."
-                    : "Only the referee can make this call, and only before the grace window ends."
-                }</p>
-                <div class="action-row">
-                  <button type="button" class="btn success" data-act="success">Mark as met — money returns</button>
-                  <button type="button" class="btn danger" data-act="fail">Mark as missed — money to the sink</button>
-                </div>`
+              ? asReferee
+                ? `<p>You are the referee. The chain — and this simulation — will follow your call. You can lie. Please don’t, unless that’s a conversation you’ve already had.</p>
+                   <p class="help">Each share link is a snapshot of this stake. A ruling here does not update someone else’s copy. On-chain, only the referee’s key can make this call, and it is final for everyone.</p>
+                   <div class="action-row">
+                     <button type="button" class="btn success" data-act="success">Mark as met — money returns</button>
+                     <button type="button" class="btn danger" data-act="fail">Mark as missed — money to the sink</button>
+                   </div>`
+                : `<p>On-chain, only the referee’s key can make this call, and only before the grace window ends. In this browser demo, the ruling buttons are only on the referee link — open that if you want to try a call.</p>
+                   <p class="help">Each share link is a snapshot. A ruling on one copy does not update the others.</p>`
               : canTimeout(s, t)
                 ? `<p>The ruling window has closed. The referee can no longer call. Anyone can apply the default.</p>`
                 : `<p>The ruling window is closed.</p>`
@@ -368,7 +379,10 @@ function renderStake(s, { asReferee } = {}) {
 
     const shares = `<div class="shares">
         <h2>Share</h2>
-        <p class="help">The referee link includes the goal wording. Treat it as private. The public link has only the hash.</p>
+        <aside class="honest">
+          <h2>The referee link contains the goal text.</h2>
+          <p>Treat it like the goal itself. Anyone with that URL can read the wording and the salt. Use the public (hash-only) link if you are posting it.</p>
+        </aside>
         ${shareRow("Your copy (goal included)", "link-full", fullUrl)}
         ${shareRow("Referee link", "link-ref", refereeUrl)}
         ${shareRow("Public link (hash only)", "link-pub", publicUrl)}
@@ -389,7 +403,15 @@ function renderStake(s, { asReferee } = {}) {
         : "";
 
     $("#stake-root").innerHTML = `
-      ${asReferee ? `<p class="banner">You were sent this as the referee. Read the goal, then make a call — or wait, and the default will run after the grace window.</p>` : ""}
+      ${
+        asReferee
+          ? `<p class="banner">You were sent this as the referee. Read the goal, then make a call — or wait, and the default will run after the grace window.</p>
+             <aside class="honest">
+               <h2>This URL contains the goal text.</h2>
+               <p>Treat it like the goal itself. Anyone with this link can read the wording and the salt. Use the public (hash-only) link if you are posting it.</p>
+             </aside>`
+          : ""
+      }
       <article class="contract">
         <div class="contract-top">
           <div>
@@ -440,7 +462,7 @@ function renderStake(s, { asReferee } = {}) {
         const out = $("#sv-out");
         out.hidden = false;
         try {
-          const text = $("#sv-goal").value;
+          const text = $("#sv-goal").value.trim();
           const salt = fromHex($("#sv-salt").value);
           if (salt.length !== 32) throw new Error("The salt must be 32 bytes (64 hex characters).");
           const h = toHex(await goalCommitment(text, salt));
@@ -492,13 +514,12 @@ function act(s, action, asReferee) {
   const next = { ...s };
   const t = nowOf(s);
   try {
-    if (action === "success") {
+    if (action === "success" || action === "fail") {
+      if (!asReferee) {
+        throw new Error("In this demo, only the referee link can make a ruling. On-chain, only the referee’s key can.");
+      }
       if (!canRule(s, t)) throw new Error("The ruling window has closed.");
-      next.status = "succeeded";
-      next.resolvedAt = t;
-    } else if (action === "fail") {
-      if (!canRule(s, t)) throw new Error("The ruling window has closed.");
-      next.status = "failed";
+      next.status = action === "success" ? "succeeded" : "failed";
       next.resolvedAt = t;
     } else if (action === "timeout") {
       if (!isOpen(s)) throw new Error("This stake is already settled.");
@@ -531,7 +552,7 @@ $("#verify-form").addEventListener("submit", async (ev) => {
     const salt = fromHex($("#v-salt").value);
     if (salt.length !== 32) throw new Error("The salt must be 32 bytes (64 hex characters).");
     if (hash.length !== 64) throw new Error("The hash must be 32 bytes (64 hex characters).");
-    const h = toHex(await goalCommitment($("#v-goal").value, salt));
+    const h = toHex(await goalCommitment($("#v-goal").value.trim(), salt));
     const ok = h === hash;
     out.className = `verify-out ${ok ? "ok" : "bad"}`;
     out.textContent = ok
@@ -542,6 +563,17 @@ $("#verify-form").addEventListener("submit", async (ev) => {
     out.textContent = e.message || String(e);
   }
 });
+
+const fillVector = $("#fill-vector");
+if (fillVector) {
+  fillVector.addEventListener("click", () => {
+    $("#v-hash").value = KNOWN_VECTOR.hash;
+    $("#v-goal").value = KNOWN_VECTOR.goal;
+    $("#v-salt").value = KNOWN_VECTOR.salt;
+    const out = $("#verify-out");
+    if (out) out.hidden = true;
+  });
+}
 
 /* ───────────────────────────── wallet / on-chain ───────────────────────────── */
 
@@ -566,12 +598,29 @@ function bareTemplate() {
   return templateAddress().replace(/^template_/, "");
 }
 
-function provider() {
-  return (
-    window.tari ||
-    (Array.isArray(window.tariProviders) && window.tariProviders.find((p) => p && p.isTariWallet)) ||
-    null
-  );
+function isUniverseStubError(e) {
+  const msg = e && (e.message || e.note || String(e));
+  return /not running inside Tari Universe|Tari wallet unavailable/i.test(String(msg));
+}
+
+function walletCandidates() {
+  const out = [];
+  const seen = new Set();
+  const add = (p) => {
+    if (p && (p.request || p.isTariWallet) && !seen.has(p)) {
+      seen.add(p);
+      out.push(p);
+    }
+  };
+  // Prefer wallets that announced themselves (Sapient, etc.) over the
+  // Universe page stub that tari-connector.js always installs as window.tari.
+  if (Array.isArray(window.tariProviders)) window.tariProviders.forEach(add);
+  add(window.tari);
+  return out;
+}
+
+function noWalletHtml() {
+  return `<span class="bad">No Tari wallet is available in this browser. Install the <b>Sapient</b> extension, switch it to ${esc(cfg().network)}, then reload this page — or open the page inside Tari Universe. You can still use the <a href="#/new">simulation</a> and read the indexer without a wallet.</span>`;
 }
 
 async function indexerGet(path) {
@@ -586,6 +635,109 @@ function cborHex(v) {
   return v;
 }
 
+/* Ootle epochs advance with a fixed number of Minotari (L1) blocks.
+   On mainnet, a couple of days after the 11 Nov 2026 launch, the counter
+   was already in the tens of thousands, so an epoch is on the order of
+   several seconds — not a day. This is a rough label only. */
+const APPROX_SECONDS_PER_EPOCH = 6;
+const DEFAULT_DEADLINE_DAYS = 30;
+const DEFAULT_GRACE_DAYS = 3;
+
+function epochsForDays(days) {
+  return Math.max(1, Math.round((days * 86400) / APPROX_SECONDS_PER_EPOCH));
+}
+
+function fmtEpochDuration(epochs) {
+  const n = Number(epochs);
+  if (!Number.isFinite(n) || n < 0) return "";
+  const sec = n * APPROX_SECONDS_PER_EPOCH;
+  let span;
+  if (sec < 90) span = `${Math.max(1, Math.round(sec))} seconds`;
+  else if (sec < 90 * 60) span = `${Math.round(sec / 60)} minutes`;
+  else if (sec < 48 * 3600) {
+    const h = Math.round(sec / 3600);
+    span = h === 1 ? "1 hour" : `${h} hours`;
+  } else {
+    const d = Math.round(sec / 86400);
+    span = d === 1 ? "1 day" : `${d} days`;
+  }
+  return `about ${span}`;
+}
+
+function fmtEpochWallClock(current, target) {
+  if (!Number.isFinite(current) || !Number.isFinite(target)) return "";
+  const ms = Date.now() + (target - current) * APPROX_SECONDS_PER_EPOCH * 1000;
+  return fmtWhen(ms);
+}
+
+function updateEpochEstimates(currentEpoch) {
+  const deadlineEl = $("#w-deadline-ep");
+  const graceEl = $("#w-grace-ep");
+  const dHint = $("#w-deadline-hint");
+  const gHint = $("#w-grace-hint");
+  const summary = $("#w-epoch-summary");
+  const deadline = deadlineEl ? Number(deadlineEl.value) : NaN;
+  const grace = graceEl ? Number(graceEl.value) : NaN;
+  if (dHint) {
+    if (Number.isFinite(deadline) && Number.isFinite(currentEpoch)) {
+      const ahead = deadline - currentEpoch;
+      dHint.textContent = ahead > 0
+        ? `Epoch ${deadline} is ${fmtEpochDuration(ahead)} from now, around ${fmtEpochWallClock(currentEpoch, deadline)} — a rough estimate. Epochs are not days.`
+        : `That deadline is not after the current epoch (${currentEpoch}). Epochs are not days.`;
+    } else {
+      dHint.textContent = `Epochs are not days. An epoch is on the order of several seconds (a rough figure). Forty-eight epochs would only be a few minutes. The default, once the current epoch is read, is about ${DEFAULT_DEADLINE_DAYS} days ahead (${epochsForDays(DEFAULT_DEADLINE_DAYS).toLocaleString()} epochs).`;
+    }
+  }
+  if (gHint) {
+    if (Number.isFinite(grace)) {
+      gHint.textContent = `Grace of ${grace.toLocaleString()} epochs is ${fmtEpochDuration(grace)} (rough). Epochs are not days.`;
+    } else {
+      gHint.textContent = `Time for the referee to rule after the deadline, in epochs — not days. The default is about ${DEFAULT_GRACE_DAYS} days (${epochsForDays(DEFAULT_GRACE_DAYS).toLocaleString()} epochs).`;
+    }
+  }
+  if (summary && Number.isFinite(currentEpoch) && Number.isFinite(deadline) && Number.isFinite(grace)) {
+    const timeoutAt = deadline + grace;
+    summary.innerHTML = `Current epoch is <b>${currentEpoch.toLocaleString()}</b>. Ruling window ends at epoch <b>${timeoutAt.toLocaleString()}</b>, around <b>${esc(fmtEpochWallClock(currentEpoch, timeoutAt))}</b> — rough, epochs are not days.`;
+    summary.hidden = false;
+  } else if (summary) {
+    summary.hidden = true;
+  }
+}
+
+async function prefetchEpochDefaults() {
+  try {
+    const net = await indexerGet("/network");
+    const ep = Number(net.epoch ?? net.current_epoch);
+    if (!Number.isFinite(ep)) return null;
+    window.__stakeEpoch = ep;
+    const deadlineEl = $("#w-deadline-ep");
+    const graceEl = $("#w-grace-ep");
+    if (deadlineEl && !deadlineEl.dataset.touched) {
+      deadlineEl.value = String(ep + epochsForDays(DEFAULT_DEADLINE_DAYS));
+    }
+    if (graceEl && !graceEl.dataset.touched) {
+      graceEl.value = String(epochsForDays(DEFAULT_GRACE_DAYS));
+    }
+    updateEpochEstimates(ep);
+    return ep;
+  } catch {
+    updateEpochEstimates(window.__stakeEpoch);
+    return null;
+  }
+}
+
+function bindEpochFields() {
+  const mark = (el) => {
+    if (!el) return;
+    el.addEventListener("input", () => {
+      el.dataset.touched = "1";
+      updateEpochEstimates(window.__stakeEpoch);
+    });
+  };
+  mark($("#w-deadline-ep"));
+  mark($("#w-grace-ep"));
+}
+
 function renderWallet() {
   const root = $("#wallet-root");
   const ready = hasTemplate();
@@ -593,7 +745,7 @@ function renderWallet() {
     <div class="banner">${
       ready
         ? `Talking to <code>${esc(templateAddress())}</code> on <b>${esc(cfg().network)}</b>. You will be asked to sign in your wallet. This page never sees your keys.`
-        : `No published template address is set yet (<code>web/config.js</code>, field <code>templateAddress</code>). You can still connect a wallet, read the current epoch, and look up a stake component. To lock funds on-chain, publish the template yourself (see the publish checklist) and paste the address there. Until then, <a href="#/new">use the simulation</a>.`
+        : `No published template address is set yet. You can still connect a wallet, read the current epoch, and look up a stake component. To lock funds on-chain, publish the template yourself (see the <a href="https://github.com/Mzee04/stake/blob/main/drafts/publish-checklist.md">publish checklist</a>) and paste the address into <a href="https://github.com/Mzee04/stake/blob/main/web/config.js"><code>config.js</code></a>. Until then, <a href="#/new">use the simulation</a>.`
     }</div>
 
     <div class="wallet-card">
@@ -627,14 +779,16 @@ function renderWallet() {
           <input id="w-amount" type="number" min="0.000001" step="any" value="1" ${ready ? "" : "disabled"} />
         </div>
         <div class="field">
-          <label for="w-deadline-ep">Deadline epoch</label>
-          <input id="w-deadline-ep" type="number" min="1" step="1" ${ready ? "" : "disabled"} placeholder="e.g. current + 48" />
+          <label for="w-deadline-ep">Deadline epoch <span class="hint-inline">— not days</span></label>
+          <input id="w-deadline-ep" type="number" min="1" step="1" ${ready ? "" : "disabled"} placeholder="read the current epoch first" />
+          <p class="help" id="w-deadline-hint">Epochs are not days. An epoch is on the order of several seconds (a rough figure). Forty-eight epochs would only be a few minutes. The default, once the current epoch is read, is about 30 days ahead.</p>
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label for="w-grace-ep">Grace (epochs)</label>
-          <input id="w-grace-ep" type="number" min="0" step="1" value="12" ${ready ? "" : "disabled"} />
+          <label for="w-grace-ep">Grace (epochs, not days)</label>
+          <input id="w-grace-ep" type="number" min="0" step="1" ${ready ? "" : "disabled"} />
+          <p class="help" id="w-grace-hint">Time for the referee to rule after the deadline, in epochs — not days. The default is about three days of epochs, not twelve days.</p>
         </div>
         <fieldset class="field">
           <legend>If the referee never answers</legend>
@@ -642,18 +796,25 @@ function renderWallet() {
           <label class="choice"><input type="radio" name="w-default" value="sink" ${ready ? "" : "disabled"} /> Send it to the sink</label>
         </fieldset>
       </div>
+      <p class="help" id="w-epoch-summary" hidden></p>
       <div class="field">
         <label for="w-referee">Referee public key <span class="hint-inline">— 64 hex characters</span></label>
         <input id="w-referee" spellcheck="false" ${ready ? "" : "disabled"} />
+        <p class="help">The only key that can rule. If you paste your own key, this is just a delayed refund button.</p>
       </div>
       <div class="field">
         <label for="w-staker-acct">Your account <span class="hint-inline">— filled on connect, for a refund</span></label>
         <input id="w-staker-acct" spellcheck="false" ${ready ? "" : "disabled"} placeholder="component_…" />
+        <p class="help">This is the refund destination, not necessarily checked against the signer. Confirm it is your account before you sign.</p>
       </div>
       <div class="field">
         <label for="w-sink">Sink account <span class="hint-inline">— component_…</span></label>
         <input id="w-sink" spellcheck="false" ${ready ? "" : "disabled"} />
       </div>
+      <aside class="honest" style="margin:0.6rem 0 1rem">
+        <h2>Both accounts must already exist.</h2>
+        <p>The template checks, when you open, that the refund account and the sink can receive a deposit. If they don’t, the transaction is rejected and your funds stay in your wallet. A mistyped address that will never be an account would otherwise make the money unrecoverable — these addresses cannot be changed later.</p>
+      </aside>
       <div class="form-actions">
         <button type="submit" class="btn primary" ${ready ? "" : "disabled"}>Lock on-chain</button>
       </div>
@@ -679,6 +840,9 @@ function renderWallet() {
   $("#w-epoch").onclick = readEpoch;
   $("#w-open").addEventListener("submit", openOnChain);
   $("#w-lookup").addEventListener("submit", lookupStake);
+  bindEpochFields();
+  updateEpochEstimates(window.__stakeEpoch);
+  prefetchEpochDefaults();
 }
 
 let wallet = null;
@@ -686,35 +850,54 @@ let walletAccount = null;
 
 async function connectWallet() {
   const box = $("#w-status");
-  wallet = provider();
-  if (!wallet) {
-    box.innerHTML = `<span class="bad">No Tari wallet found. Install <b>Sapient</b>, switch it to ${esc(cfg().network)}, then reload. You can still use the simulation and read the indexer.</span>`;
+  wallet = null;
+  walletAccount = null;
+  const candidates = walletCandidates();
+  if (!candidates.length) {
+    box.innerHTML = noWalletHtml();
     return;
   }
-  try {
-    const accts = await wallet.request({ method: "tari_requestAccounts" });
-    walletAccount = accts && accts[0];
-    let net = "";
+  let stubOnlyFailure = true;
+  for (const p of candidates) {
     try {
-      net = JSON.stringify(await wallet.request({ method: "tari_getNetwork" }));
-    } catch {}
-    let bal = "";
-    try {
-      const balances = await wallet.request({ method: "tari_getBalances" });
-      bal = esc(JSON.stringify(balances).slice(0, 400));
-    } catch {}
-    box.innerHTML = `<span class="ok" style="display:inline-block;padding:0.2rem 0.45rem">Connected</span>
-      <dl class="kv">
-        <dt>Account</dt><dd>${esc(String(walletAccount || ""))}</dd>
-        <dt>Network</dt><dd>${esc(net)}</dd>
-        ${bal ? `<dt>Balances</dt><dd>${bal}</dd>` : ""}
-      </dl>`;
-    if (walletAccount && $("#w-staker-acct")) $("#w-staker-acct").value = String(walletAccount).startsWith("component_")
-      ? walletAccount
-      : walletAccount;
-  } catch (e) {
-    box.innerHTML = `<span class="bad">${esc(e.message || e)}</span>`;
+      const accts = await p.request({ method: "tari_requestAccounts" });
+      if (!accts || !accts[0]) {
+        // A provider that returns no accounts is not a connected wallet.
+        continue;
+      }
+      wallet = p;
+      walletAccount = accts[0];
+      let net = "";
+      try {
+        net = JSON.stringify(await wallet.request({ method: "tari_getNetwork" }));
+      } catch {}
+      let bal = "";
+      try {
+        const balances = await wallet.request({ method: "tari_getBalances" });
+        bal = esc(JSON.stringify(balances).slice(0, 400));
+      } catch {}
+      box.innerHTML = `<span class="ok" style="display:inline-block;padding:0.2rem 0.45rem">Connected</span>
+        <dl class="kv">
+          <dt>Account</dt><dd>${esc(String(walletAccount || ""))}</dd>
+          <dt>Network</dt><dd>${esc(net)}</dd>
+          ${bal ? `<dt>Balances</dt><dd>${bal}</dd>` : ""}
+        </dl>`;
+      if (walletAccount && $("#w-staker-acct")) {
+        $("#w-staker-acct").value = String(walletAccount);
+      }
+      return;
+    } catch (e) {
+      if (isUniverseStubError(e)) {
+        continue;
+      }
+      stubOnlyFailure = false;
+      box.innerHTML = `<span class="bad">${esc(e.message || e)}</span>`;
+      return;
+    }
   }
+  box.innerHTML = stubOnlyFailure
+    ? noWalletHtml()
+    : `<span class="bad">The wallet did not return an account. Check it is unlocked and set to ${esc(cfg().network)}, then try again.</span>`;
 }
 
 async function readEpoch() {
@@ -723,12 +906,23 @@ async function readEpoch() {
   dl.innerHTML = `<dt>Status</dt><dd>Loading…</dd>`;
   try {
     const net = await indexerGet("/network");
-    dl.innerHTML = `<dt>Epoch</dt><dd>${esc(net.epoch ?? net.current_epoch ?? JSON.stringify(net))}</dd>
+    const shown = net.epoch ?? net.current_epoch ?? JSON.stringify(net);
+    dl.innerHTML = `<dt>Epoch</dt><dd>${esc(shown)}</dd>
+      <dt>What an epoch is</dt><dd>Not a day. Roughly ${APPROX_SECONDS_PER_EPOCH} seconds, from how fast the counter has been moving — a label, not a promise.</dd>
       <dt>Indexer</dt><dd>${esc(indexerUrl())}</dd>
       <dt>Configured network</dt><dd>${esc(cfg().network)}</dd>`;
-    const ep = net.epoch ?? net.current_epoch;
-    if (ep != null && $("#w-deadline-ep") && !$("#w-deadline-ep").value) {
-      $("#w-deadline-ep").value = Number(ep) + 48;
+    const ep = Number(net.epoch ?? net.current_epoch);
+    if (Number.isFinite(ep)) {
+      window.__stakeEpoch = ep;
+      const deadlineEl = $("#w-deadline-ep");
+      const graceEl = $("#w-grace-ep");
+      if (deadlineEl && !deadlineEl.dataset.touched) {
+        deadlineEl.value = String(ep + epochsForDays(DEFAULT_DEADLINE_DAYS));
+      }
+      if (graceEl && !graceEl.dataset.touched) {
+        graceEl.value = String(epochsForDays(DEFAULT_GRACE_DAYS));
+      }
+      updateEpochEstimates(ep);
     }
   } catch (e) {
     dl.innerHTML = `<dt>Error</dt><dd>${esc(e.message || e)}</dd>`;
@@ -782,19 +976,32 @@ function workspaceArg(id = 0) {
   return { Workspace: { id, offset: null } };
 }
 
+/** Convert a TARI decimal string to µT (1 TARI = 1,000,000 µT) without IEEE rounding. */
+function tariToMicro(input) {
+  const raw = String(input).trim();
+  if (!raw || !/^\d+(\.\d+)?$/.test(raw)) {
+    throw new Error("The amount has to be a positive number.");
+  }
+  const [whole, frac = ""] = raw.split(".");
+  if (frac.length > 6 && !/^0+$/.test(frac.slice(6))) {
+    throw new Error("The smallest unit is 0.000001 TARI (one microTari).");
+  }
+  const micro = BigInt(whole || "0") * 1_000_000n + BigInt((frac + "000000").slice(0, 6));
+  if (micro <= 0n) throw new Error("The amount has to be greater than zero.");
+  return micro;
+}
+
 async function openOnChain(ev) {
   ev.preventDefault();
   const out = $("#w-open-out");
   out.hidden = false;
   out.className = "verify-out";
   try {
-    if (!hasTemplate()) throw new Error("Set a template address in web/config.js first.");
+    if (!hasTemplate()) throw new Error("Set a template address in config.js first (see the publish checklist in the repository).");
     if (!wallet) throw new Error("Connect a wallet first.");
-    const goal = $("#w-goal").value;
-    if (!goal.trim()) throw new Error("Write a goal first. It is not sent on-chain.");
-    const amountTari = Number($("#w-amount").value);
-    if (!Number.isFinite(amountTari) || amountTari <= 0) throw new Error("The amount has to be greater than zero.");
-    const micro = BigInt(Math.round(amountTari * 1e6));
+    const goal = $("#w-goal").value.trim();
+    if (!goal) throw new Error("Write a goal first. It is not sent on-chain.");
+    const micro = tariToMicro($("#w-amount").value);
     const deadline = Number($("#w-deadline-ep").value);
     const grace = Number($("#w-grace-ep").value);
     if (!Number.isFinite(deadline) || deadline <= 0) throw new Error("Enter a deadline epoch (read the current epoch first).");
@@ -896,6 +1103,33 @@ async function sendWalletTx(params) {
   throw new Error("This wallet does not expose request().");
 }
 
+function parseStakeState(st) {
+  const at = (i, ...names) => {
+    if (Array.isArray(st) || (st && typeof st === "object" && String(i) in st && st[i] !== undefined && st[i] !== null)) {
+      if (st[i] !== undefined && st[i] !== null) return st[i];
+    }
+    if (st && typeof st === "object") {
+      for (const n of names) {
+        if (st[n] !== undefined && st[n] !== null) return st[n];
+      }
+    }
+    return undefined;
+  };
+  return {
+    staker: cborHex(at(0, "staker")),
+    stakerAccount: cborHex(at(1, "staker_account", "stakerAccount")),
+    referee: cborHex(at(2, "referee")),
+    sink: cborHex(at(3, "sink")),
+    goalHash: cborHex(at(4, "goal_hash", "goalHash")),
+    deadline: at(5, "deadline_epoch", "deadlineEpoch", "deadline"),
+    grace: at(6, "grace_epochs", "graceEpochs", "grace"),
+    refundOnTimeout: at(7, "refund_on_timeout", "refundOnTimeout"),
+    amount: at(8, "amount"),
+    pot: cborHex(at(9, "pot")),
+    status: at(10, "status"),
+  };
+}
+
 async function lookupStake(ev) {
   ev.preventDefault();
   const box = $("#w-comp-out");
@@ -904,24 +1138,23 @@ async function lookupStake(ev) {
   try {
     if (!id) throw new Error("Paste a component address.");
     const [net, raw] = await Promise.all([indexerGet("/network"), indexerGet(`/substates/${id}`)]);
-    const st = raw?.state?.up?.substate?.Component?.body?.state;
-    if (!st) throw new Error("That substate is not a component, or the indexer shape was unexpected: " + JSON.stringify(raw).slice(0, 400));
-    // Field order of the Stake struct.
-    const view = {
-      staker: cborHex(st[0]),
-      stakerAccount: cborHex(st[1]),
-      referee: cborHex(st[2]),
-      sink: cborHex(st[3]),
-      goalHash: cborHex(st[4]),
-      deadline: st[5],
-      grace: st[6],
-      refundOnTimeout: st[7],
-      amount: st[8],
-      pot: cborHex(st[9]),
-      status: st[10],
-    };
-    const epoch = net.epoch ?? net.current_epoch;
+    const st =
+      raw?.state?.up?.substate?.Component?.body?.state ??
+      raw?.substate?.Component?.body?.state ??
+      raw?.Component?.body?.state ??
+      raw?.state;
+    if (st == null || typeof st !== "object") {
+      throw new Error("That substate is not a component, or the indexer shape was unexpected: " + JSON.stringify(raw).slice(0, 400));
+    }
+    const view = parseStakeState(st);
+    if (view.status == null || view.goalHash == null) {
+      throw new Error("That component does not look like a Stake: " + JSON.stringify(st).slice(0, 400));
+    }
+    const epoch = Number(net.epoch ?? net.current_epoch);
     const timeout = Number(view.deadline) + Number(view.grace);
+    const isOpenStatus = String(view.status) === "open";
+    const canRuleNow = isOpenStatus && Number.isFinite(epoch) && epoch < timeout;
+    const canTimeoutNow = isOpenStatus && Number.isFinite(epoch) && epoch >= timeout;
     box.innerHTML = `
       <dl class="kv">
         <dt>Status</dt><dd>${esc(view.status)}</dd>
@@ -943,11 +1176,19 @@ async function lookupStake(ev) {
         <p class="verify-out" id="wv-out" hidden></p>
       </form>
       <div class="action-row" style="margin-top:0.8rem">
-        <button type="button" class="btn success" data-rule="rule_success" ${view.status === "open" ? "" : "disabled"}>Rule: success</button>
-        <button type="button" class="btn danger" data-rule="rule_fail" ${view.status === "open" ? "" : "disabled"}>Rule: fail</button>
-        <button type="button" class="btn warn" data-rule="timeout" ${view.status === "open" ? "" : "disabled"}>Timeout</button>
+        <button type="button" class="btn success" data-rule="rule_success" ${canRuleNow ? "" : "disabled"}>Rule: success</button>
+        <button type="button" class="btn danger" data-rule="rule_fail" ${canRuleNow ? "" : "disabled"}>Rule: fail</button>
+        <button type="button" class="btn warn" data-rule="timeout" ${canTimeoutNow ? "" : "disabled"}>Timeout</button>
       </div>
-      <p class="help">Ruling must be signed by the referee’s key. Timeout may be signed by anyone, once the window has closed. The template will reject a wrong signer or an early timeout.</p>
+      <p class="help">${
+        !isOpenStatus
+          ? "This stake is already settled."
+          : canTimeoutNow
+            ? "The ruling window has closed. Anyone can apply the default. The referee can no longer rule."
+            : canRuleNow
+              ? `The referee can still rule (until epoch ${timeout}; current ${epoch}). Timeout is offered only once that epoch is reached — the same way the simulation disables it. The template remains the real authority and will reject a wrong signer or an early timeout.`
+              : "Could not compare the current epoch to the timeout. The template will still reject a wrong signer or an early timeout."
+      }</p>
       <p class="verify-out" id="w-rule-out" hidden></p>
     `;
     $("#w-verify-onchain").addEventListener("submit", async (e) => {
@@ -957,7 +1198,7 @@ async function lookupStake(ev) {
       try {
         const salt = fromHex($("#wv-salt").value);
         if (salt.length !== 32) throw new Error("The salt must be 32 bytes.");
-        const h = toHex(await goalCommitment($("#wv-goal").value, salt));
+        const h = toHex(await goalCommitment($("#wv-goal").value.trim(), salt));
         const expect = String(view.goalHash).toLowerCase().replace(/^0x/, "");
         const ok = h === expect;
         o.className = `verify-out ${ok ? "ok" : "bad"}`;

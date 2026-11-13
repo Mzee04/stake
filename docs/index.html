@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Stake — a private goal, locked on Tari</title>
   <meta name="description" content="Lock some TARI against a private goal. A person you trust decides if you kept it. Only a hash of the goal goes on the chain." />
+  <meta property="og:title" content="Stake — a private goal, locked on Tari" />
+  <meta property="og:description" content="Lock some TARI against a private goal. A person you trust decides if you kept it. Only a hash of the goal goes on the chain." />
+  <meta property="og:url" content="https://mzee04.github.io/stake/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="en" />
   <meta name="theme-color" content="#f3efe6" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%238c2f24'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%23e8c4b8' stroke-width='1.5'/%3E%3Ctext x='32' y='41' text-anchor='middle' font-family='Georgia,serif' font-size='26' fill='%23f6e6d8'%3ES%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -80,8 +85,8 @@
       <form id="create-form" class="contract-form" novalidate>
         <div class="field">
           <label for="goal">Your goal <span class="hint-inline">— stays off the chain</span></label>
-          <textarea id="goal" name="goal" rows="3" required maxlength="500" placeholder="Run a 5k before the year ends"></textarea>
-          <p class="help">Write it the way you’d tell a friend. Only a hash of this text, plus a random salt, is recorded. You can share the wording with your referee through a private link.</p>
+          <textarea id="goal" name="goal" rows="3" required maxlength="500" placeholder="run a 5k before the year ends"></textarea>
+          <p class="help">Write it the way you’d tell a friend. Leading and trailing spaces are trimmed before the hash is taken, so what you see is what is hashed. Inner spaces are kept. Only that hash, plus a random salt, is recorded. You can share the wording with your referee through a private link.</p>
         </div>
 
         <div class="row">
@@ -102,7 +107,7 @@
           <div class="field">
             <label for="referee">Referee’s name</label>
             <input id="referee" name="referee" type="text" required maxlength="80" placeholder="Ada, a friend" />
-            <p class="help">In this simulation, a name is enough. On-chain, this is a Tari public key — the only key that can rule.</p>
+            <p class="help">In this simulation, a name is enough. On-chain, this is a Tari public key — the only key that can rule. If you name yourself, this is just a delayed refund button.</p>
           </div>
           <div class="field">
             <label for="sink">If you miss, the money goes to</label>
@@ -153,7 +158,7 @@
 
       <h2>The rules, on-chain</h2>
       <ol>
-        <li><strong>Open.</strong> You lock a positive amount, a goal hash, a referee’s public key, your account (for a refund), a sink account, a deadline epoch, a grace period, and a timeout default. The deadline must be in the future. You are the transaction signer — the staker.</li>
+        <li><strong>Open.</strong> You lock a positive amount, a goal hash, a referee’s public key, your account (for a refund), a sink account, a deadline epoch, a grace period, and a timeout default. The deadline must be in the future. Both accounts must already exist and be able to receive a deposit — the template checks this, and rejects the transaction if they don’t. You are the transaction signer — the staker.</li>
         <li><strong>Rule, success.</strong> Only the referee, and only before the timeout epoch (<code>deadline + grace</code>). The funds are deposited back to your account.</li>
         <li><strong>Rule, fail.</strong> Only the referee, same window. The funds are deposited to the sink.</li>
         <li><strong>Timeout.</strong> Anyone, at or after the timeout epoch, if nobody has ruled. The default you chose at the start runs: refund, or pay the sink.</li>
@@ -164,12 +169,13 @@
       <ul>
         <li>The referee can lie. There is no automatic evidence (no Strava, no photo proof that the chain will accept). Pick someone you trust, and who will actually answer.</li>
         <li>If you name yourself as referee, this is just a delayed refund button. That’s allowed, and not much of a commitment.</li>
-        <li>The sink account has to exist by the time funds are sent to it. If a deposit fails, the whole transaction fails and can be retried once the account is created — the stake stays open.</li>
+        <li>Both the staker’s refund account and the sink account must already exist when you open the stake, and must be able to receive a deposit. The template checks this and will reject the transaction if they don’t, so funds cannot get stuck against an address that will never accept a deposit.</li>
         <li>The share link that includes your goal is secret only as long as you keep it. Treat it like the goal itself.</li>
       </ul>
 
       <h2>Verify a goal</h2>
-      <p>Paste a hash, the original text, and the salt. This uses the same formula as the template. You can do it here without opening a stake.</p>
+      <p>Paste a hash, the original text, and the salt. This uses the same formula as the template. Leading and trailing spaces on the text are trimmed first, the same way they are when a stake is opened. You can do it here without opening a stake.</p>
+      <p>A documented test vector is: goal <code>run a 5k before the year ends</code> (lowercase, no full stop), salt <code>11</code> repeated 32 times, hash <code>e812a457194e9f1907c959abd315848f538fb7029c5144fc064b76d23de22975</code>. The “Fill in a sample” button on the New page uses this same wording.</p>
       <form id="verify-form" class="verify-form" novalidate>
         <div class="field">
           <label for="v-hash">On-chain hash <span class="hint-inline">— 64 hex characters</span></label>
@@ -183,7 +189,10 @@
           <label for="v-salt">Salt <span class="hint-inline">— 64 hex characters, 32 bytes</span></label>
           <input id="v-salt" name="salt" spellcheck="false" />
         </div>
-        <button type="submit" class="btn primary">Verify</button>
+        <div class="form-actions" style="margin-top:0">
+          <button type="button" class="btn ghost" id="fill-vector">Fill the documented test vector</button>
+          <button type="submit" class="btn primary">Verify</button>
+        </div>
         <p class="verify-out" id="verify-out" hidden></p>
       </form>
 

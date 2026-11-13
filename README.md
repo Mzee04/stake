@@ -19,7 +19,7 @@ The goal text itself never goes on the chain. What is stored is:
 sha256( "stake/goal/v1" || goal text as UTF-8 || 32-byte salt )
 ```
 
-Anyone with the wording and the salt can check that they match the hash. A share link can carry those off-chain; a public link carries only the hash.
+Anyone with the wording and the salt can check that they match the hash. A share link can carry those off-chain; a public link carries only the hash. Leading and trailing spaces on the goal are trimmed before hashing, in both the web app and when you verify; inner spaces are kept.
 
 Then:
 
@@ -46,7 +46,7 @@ Other limits:
 
 - There is no automatic evidence (no Strava, no photo the chain will accept). Pick someone who will actually answer.
 - If you name yourself as referee, this is just a delayed refund button. That’s allowed, and not much of a commitment.
-- The sink account has to exist by the time funds are sent to it. If a deposit fails, the whole transaction fails and can be retried once the account is created — the stake stays open.
+- Both the staker’s refund account and the sink account must already exist when you open the stake, and must be able to receive a deposit. The template checks this at `open` and will reject the transaction if they don’t, so funds cannot get stuck against an address that will never accept a deposit. These addresses cannot be changed later.
 - A share link that includes your goal is secret only as long as you keep it. Treat it like the goal itself.
 
 ## The web app
@@ -69,7 +69,7 @@ rustup target add wasm32-unknown-unknown
 cargo test
 ```
 
-The tests cover success, fail, timeout-refund, timeout-sink, a wrong referee, a double ruling, an early timeout, a referee still ruling during grace, a ruling after the window, a past deadline, a zero stake, and the documented goal-hash vector:
+The tests cover success, fail, timeout-refund, timeout-sink, a wrong referee, a double ruling, an early timeout, a referee still ruling during grace, a ruling after the window, a past deadline, a deadline equal to now, a zero stake, grace of zero, deadline-plus-grace overflow, payout accounts that are missing or not accounts, and the documented goal-hash vector (including a wrong salt):
 
 ```
 goal  = "run a 5k before the year ends"
@@ -90,7 +90,7 @@ cd templates/stake && cargo build --release --target wasm32-unknown-unknown
 
 ## Publish (you sign; this repo does not)
 
-See [drafts/publish-checklist.md](drafts/publish-checklist.md) for the exact steps. In short: build the WASM, then publish it yourself from the Tari wallet web UI (Sapient or Universe) on Esmeralda and, if you want, mainnet. Paste the resulting `template_…` address into `web/config.js`. Never put a key, a seed, or a payment address in this repository.
+See [drafts/publish-checklist.md](drafts/publish-checklist.md) for the exact steps. In short: build the WASM, then publish it yourself from the Tari wallet web UI (Sapient or Universe) on Esmeralda and, if you want, mainnet. Paste the resulting `template_…` address into `web/config.js`. Never put a key or a seed in this repository.
 
 ## License
 

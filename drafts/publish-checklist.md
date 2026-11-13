@@ -1,6 +1,6 @@
 # Publish checklist
 
-You sign, you publish, you post. Nothing in this repository, and no agent working on it, should ever use or ask for your keys, seed, or payment address. Fill the placeholders yourself.
+You sign, you publish, you post. Nothing in this repository, and no agent working on it, should ever use or ask for your keys or seed.
 
 All times below are for the contest deadline: **Tuesday 1 December 2026, 1:00 AM Africa/Lagos** (00:00 UTC).
 
@@ -54,7 +54,7 @@ Prefer the **wallet web UI**. This is the official path and the one that runs `w
 5. Upload `stake.wasm` (or the `.min.wasm` if you made one and are publishing outside the UI; the UI prefers the raw `cargo` output and minifies it itself).
 6. Click **Estimate Fee**. Do not type a fee from memory. Publishing is priced on binary size.
 7. Click **Publish Template** and confirm in the wallet. You are the signer.
-8. When it confirms, open **Templates** in the sidebar and copy the new address (`template_` followed by 64 hex characters). Save the transaction id. The Esmeralda explorer is `https://explorer.tari.mw/tx/<id>`.
+8. When it confirms, open **Templates** in the sidebar and copy the new address (`template_` followed by 64 hex characters). Save the transaction id. The Esmeralda explorer is `https://testnet-explorer.tari.mw/tx/<id>`. The mainnet Ootle explorer is `https://explorer.tari.mw` (Veil). `explore.tari.com` is the Minotari L1 explorer, not Ootle.
 
 ### Mainnet, if you want a live mainnet contract
 
@@ -70,51 +70,38 @@ In `web/config.js`:
 window.STAKE_CONFIG = {
   network: "esmeralda",          // or "mainnet"
   templateAddress: "template_…", // the address you just copied
-  // indexer and explorer URLs are already filled for Esmeralda.
-  // For mainnet, confirm the current indexer and explorer URLs
-  // against ootle.tari.com before you rely on them.
+  // Indexer and explorer URLs are already filled for both networks
+  // (verified 13 Nov 2026):
+  //   esmeralda indexer  https://ootle-indexer-a.tari.com
+  //   mainnet indexer    https://indexer-a.ootle.tari.com
+  //   esmeralda explorer https://testnet-explorer.tari.mw
+  //   mainnet explorer   https://explorer.tari.mw
 };
 ```
 
 Commit that change after the address is real. Leave it empty until then; the simulation does not need it.
 
-## 5. Put the site on GitHub Pages
+## 5. The live site
 
-Create the GitHub repository yourself (this work does not). Suggested name: `stake`. Public, MIT, no secrets.
+The public repo is https://github.com/Mzee04/stake and the app is already live at https://mzee04.github.io/stake/ (GitHub Pages, `main` branch, `/docs`). After you change files in `web/`, copy them to `docs/` and push `main` so Pages picks them up.
 
-GitHub Pages serves the repo root or `/docs`, not `/web`. Either:
+Walk through the simulation once after each deploy (create, referee link, success, and — with the clock — a timeout). Try “On-chain” only after step 4, and only with a wallet you control, on the network you published to.
 
-```bash
-cp -R web docs
-git add docs
-# then: Settings → Pages → Deploy from a branch → main → /docs
-```
+## 6. Post the forum reply yourself
 
-or put the contents of `web/` at the root of a `gh-pages` branch.
+The Bluesky announcement is already live:
 
-Open the Pages URL and walk through the simulation once (create, referee link, success, and — with the clock — a timeout). Try “On-chain” only after step 4, and only with a wallet you control, on the network you published to.
+https://bsky.app/profile/iammzee.bsky.social/post/3n27ulws2gk2i
 
-The live URL will look like `https://<your-github-username>.github.io/stake/`.
-
-## 6. Fill the drafts and post them yourself
-
-In `drafts/forum-reply.md` and `drafts/bluesky.md`, replace:
-
-- `[REPO_URL]` with the public GitHub URL
-- `[LIVE_URL]` with the GitHub Pages URL
-- `` `<TARI_ADDRESS>` `` with your Tari payment address (the same one you have used before is fine; do not commit the filled file if you don’t want the address in git — paste it into the forum compose box)
-- `[ANNOUNCEMENT_URL]` with the Bluesky (or Medium) post, once it is live
-
-Post the Bluesky post first (300-character limit; count again in the compose box; **not X** — the contest does not count X). Then reply **once** on:
+`drafts/forum-reply.md` already has the public repo, the live app, your Tari payment address, and that announcement URL. Review it once more, then reply **once** on:
 
 https://community.tari.com/t/november-build-contest-thread-mvp/520
 
-with the five required items: public code, running app, description, payment address, announcement link.
+with the five required items: public code, running app, description, payment address, announcement link. Do not submit on X — the contest does not count X. If you later update the entry, edit that same post in place.
 
 ## 7. What not to do
 
 - Do not put a key, a seed phrase, or a wallet backup in this repo, in `web/config.js`, or in a draft that you commit.
 - Do not let anyone else sign, publish, or post for you.
 - Do not submit on X.
-- Do not rename this product “Recall”.
 - If a publish or a transaction fails, read the wallet’s reason, fix it, and retry yourself. A failed publish does not spend the template, but it may spend a fee.

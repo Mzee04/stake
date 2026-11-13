@@ -8,11 +8,16 @@ window.STAKE_CONFIG = {
   templateAddress: "",
   indexer: {
     esmeralda: "https://ootle-indexer-a.tari.com",
-    // Confirm this against current docs before a mainnet publish; it is a starting point.
-    mainnet: "https://ootle-indexer.tari.com",
+    // Verified 13 Nov 2026: returns {"network":"mainnet",…} with CORS *.
+    // The older host ootle-indexer.tari.com fails TLS (unexpected eof).
+    mainnet: "https://indexer-a.ootle.tari.com",
   },
   explorer: {
-    esmeralda: "https://explorer.tari.mw",
-    mainnet: "https://explore.tari.com",
+    // Veil, the Ootle L2 explorer. Verified 13 Nov 2026 against its own
+    // network config: testnet-explorer.tari.mw talks to the Esmeralda
+    // indexer; explorer.tari.mw talks to mainnet. explore.tari.com is the
+    // Minotari L1 explorer, not Ootle, and is not used here.
+    esmeralda: "https://testnet-explorer.tari.mw",
+    mainnet: "https://explorer.tari.mw",
   },
 };
