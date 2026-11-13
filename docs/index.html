@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stake — a private goal, locked on Tari</title>
+  <meta name="description" content="Lock some TARI against a private goal. A person you trust decides if you kept it. Only a hash of the goal goes on the chain." />
+  <meta name="theme-color" content="#f3efe6" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%238c2f24'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%23e8c4b8' stroke-width='1.5'/%3E%3Ctext x='32' y='41' text-anchor='middle' font-family='Georgia,serif' font-size='26' fill='%23f6e6d8'%3ES%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Figtree:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://universe.tari.mw/tari-connector.js" defer></script>
+  <script src="config.js"></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <a class="brand" href="#/" aria-label="Stake home">
+      <span class="seal" aria-hidden="true">S</span>
+      <span class="brand-name">Stake</span>
+    </a>
+    <nav class="nav">
+      <a href="#/" data-nav="home">Home</a>
+      <a href="#/new" data-nav="new">New stake</a>
+      <a href="#/how" data-nav="how">How it works</a>
+      <a href="#/wallet" data-nav="wallet">On-chain</a>
+    </nav>
+  </header>
+
+  <main id="main">
+
+    <!-- ───────── HOME ───────── -->
+    <section id="view-home" class="view">
+      <div class="hero">
+        <p class="kicker">A commitment contract on Tari Ootle</p>
+        <h1>Lock some TARI against a <em>private</em> goal.</h1>
+        <p class="lede">A person you already trust decides if you kept it. Only a hash of the goal goes on the chain — so a debt, a health goal, or a habit never sits on a public ledger, or on someone else’s server.</p>
+        <div class="cta">
+          <a class="btn primary" href="#/new">Try it without a wallet</a>
+          <a class="btn ghost" href="#/how">How it works</a>
+        </div>
+        <p class="cta-note">The simulation is the full product: create a stake, send a referee a link, rule, and see where the money goes. No wallet, no network. The on-chain path is ready once a template is published.</p>
+      </div>
+
+      <aside class="honest" role="note">
+        <h2>The referee can lie.</h2>
+        <p>Stake is only as honest as the person you name, the same way <a href="https://www.stickk.com/" rel="noopener noreferrer" target="_blank">stickK</a> is. The chain cannot see whether you hit your goal. It only holds the money and follows the referee’s call — or, if they never answer, the default you picked at the start.</p>
+      </aside>
+
+      <ol class="steps-row">
+        <li>
+          <span class="n">1</span>
+          <h3>You write a goal</h3>
+          <p>It stays on your device. The chain stores only a hash, with a random salt.</p>
+        </li>
+        <li>
+          <span class="n">2</span>
+          <h3>You lock an amount</h3>
+          <p>You name a referee, a deadline, a place the money goes if you miss, and a default if nobody rules.</p>
+        </li>
+        <li>
+          <span class="n">3</span>
+          <h3>They rule, or time runs out</h3>
+          <p>Met — the money comes back to you. Missed — it goes to the sink. Silence — your default runs.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ───────── NEW ───────── -->
+    <section id="view-new" class="view" hidden>
+      <header class="page-head">
+        <h1>Open a stake</h1>
+        <p>This runs in your browser. Nothing is sent to a server. You can later do the same thing on-chain with a wallet.</p>
+      </header>
+
+      <form id="create-form" class="contract-form" novalidate>
+        <div class="field">
+          <label for="goal">Your goal <span class="hint-inline">— stays off the chain</span></label>
+          <textarea id="goal" name="goal" rows="3" required maxlength="500" placeholder="Run a 5k before the year ends"></textarea>
+          <p class="help">Write it the way you’d tell a friend. Only a hash of this text, plus a random salt, is recorded. You can share the wording with your referee through a private link.</p>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="amount">Amount to lock</label>
+            <div class="with-unit">
+              <input id="amount" name="amount" type="number" min="0.000001" step="any" required value="50" />
+              <span>TARI</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="deadline">Goal deadline</label>
+            <input id="deadline" name="deadline" type="datetime-local" required />
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="referee">Referee’s name</label>
+            <input id="referee" name="referee" type="text" required maxlength="80" placeholder="Ada, a friend" />
+            <p class="help">In this simulation, a name is enough. On-chain, this is a Tari public key — the only key that can rule.</p>
+          </div>
+          <div class="field">
+            <label for="sink">If you miss, the money goes to</label>
+            <input id="sink" name="sink" type="text" required maxlength="80" placeholder="The local food bank" />
+            <p class="help">A friend, or a cause. On-chain this is a Tari account.</p>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="grace">Grace after the deadline</label>
+            <div class="with-unit">
+              <input id="grace" name="grace" type="number" min="0" step="1" required value="7" />
+              <span>days</span>
+            </div>
+            <p class="help">Time for the referee to make a call after the deadline. Once this ends, anyone can trigger the default.</p>
+          </div>
+          <fieldset class="field">
+            <legend>If the referee never answers</legend>
+            <label class="choice"><input type="radio" name="default" value="refund" checked /> Return the money to me</label>
+            <label class="choice"><input type="radio" name="default" value="sink" /> Send it to the sink above</label>
+          </fieldset>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="fill-sample">Fill in a sample</button>
+          <button type="submit" class="btn primary">Lock this stake</button>
+        </div>
+        <p class="form-error" id="create-error" hidden></p>
+      </form>
+    </section>
+
+    <!-- ───────── STAKE (sim) ───────── -->
+    <section id="view-stake" class="view" hidden>
+      <div id="stake-root"></div>
+    </section>
+
+    <!-- ───────── HOW ───────── -->
+    <section id="view-how" class="view prose" hidden>
+      <header class="page-head">
+        <h1>How Stake works</h1>
+        <p>A short, honest account of the product, the chain, and the limits.</p>
+      </header>
+
+      <h2>Why Tari</h2>
+      <p>People will put money on a goal. They will not always put the goal itself on a public chain, or in a company’s database. A weight target, a debt, a promise to quit something — that is private. Stake stores only <code>sha256("stake/goal/v1" || goal text || 32-byte salt)</code>. Anyone with the text and the salt can check that they match the hash. Nobody else can read the goal from the chain.</p>
+      <p>The amount is public. It sits in a component vault, the same way many Ootle apps hold funds. The privacy claim is the goal, not the number.</p>
+
+      <h2>The rules, on-chain</h2>
+      <ol>
+        <li><strong>Open.</strong> You lock a positive amount, a goal hash, a referee’s public key, your account (for a refund), a sink account, a deadline epoch, a grace period, and a timeout default. The deadline must be in the future. You are the transaction signer — the staker.</li>
+        <li><strong>Rule, success.</strong> Only the referee, and only before the timeout epoch (<code>deadline + grace</code>). The funds are deposited back to your account.</li>
+        <li><strong>Rule, fail.</strong> Only the referee, same window. The funds are deposited to the sink.</li>
+        <li><strong>Timeout.</strong> Anyone, at or after the timeout epoch, if nobody has ruled. The default you chose at the start runs: refund, or pay the sink.</li>
+      </ol>
+      <p>A second ruling is rejected. A timeout before the window closes is rejected. A call from anyone but the referee is rejected. The template checks all of this; the engine tests cover each path.</p>
+
+      <h2>What this will not do</h2>
+      <ul>
+        <li>The referee can lie. There is no automatic evidence (no Strava, no photo proof that the chain will accept). Pick someone you trust, and who will actually answer.</li>
+        <li>If you name yourself as referee, this is just a delayed refund button. That’s allowed, and not much of a commitment.</li>
+        <li>The sink account has to exist by the time funds are sent to it. If a deposit fails, the whole transaction fails and can be retried once the account is created — the stake stays open.</li>
+        <li>The share link that includes your goal is secret only as long as you keep it. Treat it like the goal itself.</li>
+      </ul>
+
+      <h2>Verify a goal</h2>
+      <p>Paste a hash, the original text, and the salt. This uses the same formula as the template. You can do it here without opening a stake.</p>
+      <form id="verify-form" class="verify-form" novalidate>
+        <div class="field">
+          <label for="v-hash">On-chain hash <span class="hint-inline">— 64 hex characters</span></label>
+          <input id="v-hash" name="hash" spellcheck="false" placeholder="e812a457194e9f19…" />
+        </div>
+        <div class="field">
+          <label for="v-goal">Goal text</label>
+          <textarea id="v-goal" name="goal" rows="2"></textarea>
+        </div>
+        <div class="field">
+          <label for="v-salt">Salt <span class="hint-inline">— 64 hex characters, 32 bytes</span></label>
+          <input id="v-salt" name="salt" spellcheck="false" />
+        </div>
+        <button type="submit" class="btn primary">Verify</button>
+        <p class="verify-out" id="verify-out" hidden></p>
+      </form>
+
+      <h2>Code and tests</h2>
+      <p>The Rust template, the engine tests, and this page are in the same repository, MIT licensed. Run <code>cargo test</code> at the repo root (needs the <code>wasm32-unknown-unknown</code> target). Serve this folder with any static server, for example <code>python3 -m http.server 8000</code>.</p>
+    </section>
+
+    <!-- ───────── WALLET / ON-CHAIN ───────── -->
+    <section id="view-wallet" class="view" hidden>
+      <header class="page-head">
+        <h1>On-chain</h1>
+        <p>Talk to a published Stake template with the <b>Sapient</b> extension or Tari Universe. Until a template address is set, this page will not try to send a transaction — the simulation is the path for trying the product.</p>
+      </header>
+      <div id="wallet-root"></div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <p>Stake · a commitment contract on Tari Ootle · MIT license · Toyyib Muhammed, 2026</p>
+    <p class="foot-links"><a href="#/how">How it works</a> · <a href="#/wallet">On-chain</a></p>
+  </footer>
+
+  <noscript>
+    <p class="noscript">Stake needs JavaScript to hash a goal and run the simulation in your browser.</p>
+  </noscript>
+</body>
+</html>
