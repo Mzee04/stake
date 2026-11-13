@@ -74,8 +74,11 @@ mod stake {
         /// Lock `stake` against `goal_hash`. The transaction signer is the staker.
         ///
         /// * `referee` — the only key that may call `rule_success` or `rule_fail`.
-        /// * `staker_account` — where a refund is deposited.
+        /// * `staker_account` — where a refund is deposited. Must already exist
+        ///   as an account that can receive a deposit; this is checked here.
         /// * `sink` — where funds go on a fail, or on a sink-on-timeout.
+        ///   Same existence check as `staker_account`. A mistyped address that
+        ///   is never an account would otherwise make the funds unrecoverable.
         /// * `deadline_epoch` — must be strictly in the future. This is the goal deadline.
         /// * `grace_epochs` — extra epochs after the deadline for the referee to rule.
         ///   Timeout becomes available at `deadline_epoch + grace_epochs`.
@@ -97,6 +100,13 @@ mod stake {
                 .checked_add(grace_epochs)
                 .expect("Deadline plus grace overflows");
             assert!(timeout_at > now, "The ruling window must end in the future");
+
+            // Both payout destinations must already be accounts that can take a
+            // deposit. If we only found out at `pay`, a mistyped address that
+            // will never be creatable would trap the funds: the template cannot
+            // change these addresses after `open`, and every payout would fail.
+            Self::assert_payout_account(staker_account, "The staker refund account");
+            Self::assert_payout_account(sink, "The sink payout account");
 
             let staker = CallerContext::transaction_signer_public_key();
             let amount = stake.amount();
@@ -246,6 +256,16 @@ mod stake {
         }
 
         // ── internals ──────────────────────────────────────────────────────
+
+        fn assert_payout_account(address: ComponentAddress, role: &str) {
+            // `get_state_value` panics if the component does not exist, which
+            // rejects `open` and returns the stake bucket to the caller.
+            let state = ComponentManager::get(address).get_state_value();
+            assert!(
+                Account::from_value(&state).is_ok(),
+                "{role} must be an existing account that can receive a deposit"
+            );
+        }
 
         fn pay(&mut self, to: ComponentAddress) {
             let amt = self.pot.balance();

@@ -28,5 +28,14 @@ mod test_coin {
         pub fn take(&mut self, amount: Amount) -> Bucket {
             self.coins.withdraw(amount)
         }
+
+        /// A zero-amount bucket of a fresh public resource, so tests can
+        /// exercise `Stake.open`'s "must be positive" check. `Vault::withdraw(0)`
+        /// is rejected by the engine, which would otherwise mask that check.
+        pub fn zero_bucket(&self) -> Bucket {
+            ResourceBuilder::public_fungible()
+                .with_token_symbol("ZERO")
+                .initial_supply(Amount::from(0u64))
+        }
     }
 }

@@ -2,8 +2,10 @@
 //!
 //! Covers the required paths: success, fail, timeout-refund, timeout-sink,
 //! wrong referee rejected, double-ruling rejected, early timeout rejected.
-//! Also: past deadline rejected, zero stake rejected, goal verification,
-//! and a referee still ruling during the grace window.
+//! Also: past deadline rejected, a deadline equal to now, zero stake rejected,
+//! goal verification (wrong goal and wrong salt), a referee still ruling
+//! during the grace window, grace of zero, deadline-plus-grace overflow,
+//! and payout accounts that are missing or not accounts.
 
 use sha2::{Digest, Sha256};
 use tari_template_lib::types::{
@@ -255,6 +257,13 @@ fn success_returns_funds_to_the_staker() {
         vec![],
     );
     assert!(!bad, "a different goal must not verify");
+    let bad_salt: bool = w.test.call_method(
+        w.stake,
+        "verify_goal",
+        args![GOAL.as_bytes().to_vec(), Hash32::from_array([0x22; 32])],
+        vec![],
+    );
+    assert!(!bad_salt, "the right goal with a wrong salt must not verify");
 
     call(&mut w, "rule_success", Who::Referee).expect("rule_success");
     assert_eq!(status(&mut w), "succeeded");
@@ -429,19 +438,25 @@ fn a_past_deadline_is_rejected() {
     );
 }
 
-#[test]
-fn a_zero_stake_is_rejected() {
-    let mut test = TemplateTest::new(env!("CARGO_MANIFEST_DIR"), ["templates/stake", "templates/test_coin"]);
-    test.enable_auto_add_proofs_from_signers();
-    set_epoch(&mut test, START);
-    let coin: ComponentAddress = test.call_function("TestCoin", "new", args![Amount::from(1_000_000u64)], vec![]);
-    let staker = party(&mut test);
-    let referee = party(&mut test);
-    let sink = party(&mut test);
-    // take(0) may itself fail; try opening with a zero bucket by taking 0.
-    let t = test
-        .transaction()
-        .call_method(coin, "take", args![Amount::from(0u64)])
+/// Shared helper: try to open a stake and return the reject reason, or panic on success.
+fn open_reject(
+    test: &mut TemplateTest,
+    coin: ComponentAddress,
+    staker: &Party,
+    referee: &Party,
+    staker_account: ComponentAddress,
+    sink_account: ComponentAddress,
+    deadline: u64,
+    grace: u64,
+    amount: Option<u64>,
+) -> String {
+    let mut tx = test.transaction();
+    tx = if let Some(amount) = amount {
+        tx.call_method(coin, "take", args![Amount::from(amount)])
+    } else {
+        tx.call_method(coin, "zero_bucket", args![])
+    };
+    let t = tx
         .put_last_instruction_output_on_workspace("stake")
         .call_function(
             test.get_template_address("Stake"),
@@ -450,19 +465,207 @@ fn a_zero_stake_is_rejected() {
                 Workspace("stake"),
                 goal_commitment(GOAL, &salt()),
                 referee.pk,
-                staker.account,
-                sink.account,
-                DEADLINE,
-                GRACE,
+                staker_account,
+                sink_account,
+                deadline,
+                grace,
                 true
             ],
         )
         .finish()
         .seal(&staker.sk);
     let r = test.execute_and_commit_on_success(t, vec![]);
-    let reason = r.finalize.result.any_reject().expect("should reject").to_string();
+    r.finalize
+        .result
+        .any_reject()
+        .expect("open should have been rejected")
+        .to_string()
+}
+
+fn fresh() -> (TemplateTest, ComponentAddress, Party, Party, Party) {
+    let mut test = TemplateTest::new(env!("CARGO_MANIFEST_DIR"), ["templates/stake", "templates/test_coin"]);
+    test.enable_auto_add_proofs_from_signers();
+    set_epoch(&mut test, START);
+    let coin: ComponentAddress = test.call_function("TestCoin", "new", args![Amount::from(1_000_000u64)], vec![]);
+    let staker = party(&mut test);
+    let referee = party(&mut test);
+    let sink = party(&mut test);
+    (test, coin, staker, referee, sink)
+}
+
+#[test]
+fn a_zero_stake_is_rejected() {
+    let (mut test, coin, staker, referee, sink) = fresh();
+    // `zero_bucket` builds an empty bucket of a fresh resource, because
+    // `Vault::withdraw(0)` is rejected by the engine and would never reach
+    // the template's "must be positive" check.
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        staker.account,
+        sink.account,
+        DEADLINE,
+        GRACE,
+        None,
+    );
     assert!(
-        reason.contains("The stake must be positive") || reason.contains("zero") || reason.contains("0"),
+        reason.contains("The stake must be positive"),
         "unexpected reject: {reason}"
     );
+}
+
+#[test]
+fn a_deadline_equal_to_the_current_epoch_is_rejected() {
+    let (mut test, coin, staker, referee, sink) = fresh();
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        staker.account,
+        sink.account,
+        START, // equal to the current epoch, not strictly in the future
+        GRACE,
+        Some(STAKE),
+    );
+    assert!(
+        reason.contains("Deadline must be in the future"),
+        "unexpected reject: {reason}"
+    );
+}
+
+#[test]
+fn deadline_plus_grace_overflow_is_rejected() {
+    let (mut test, coin, staker, referee, sink) = fresh();
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        staker.account,
+        sink.account,
+        u64::MAX,
+        1,
+        Some(STAKE),
+    );
+    assert!(
+        reason.contains("Deadline plus grace overflows"),
+        "unexpected reject: {reason}"
+    );
+}
+
+#[test]
+fn a_missing_staker_account_is_rejected() {
+    let (mut test, coin, staker, referee, sink) = fresh();
+    let missing = ComponentAddress::from_array([0xAB; 32]);
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        missing,
+        sink.account,
+        DEADLINE,
+        GRACE,
+        Some(STAKE),
+    );
+    // A missing component panics inside `get_state_value` with an engine
+    // error; a present non-account hits our own assert (tested below).
+    assert!(
+        reason.contains("The staker refund account must be an existing account")
+            || reason.to_lowercase().contains("not found")
+            || reason.to_lowercase().contains("does not exist")
+            || reason.to_lowercase().contains("substate"),
+        "unexpected reject: {reason}"
+    );
+}
+
+#[test]
+fn a_missing_sink_account_is_rejected() {
+    let (mut test, coin, staker, referee, _sink) = fresh();
+    let missing = ComponentAddress::from_array([0xCD; 32]);
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        staker.account,
+        missing,
+        DEADLINE,
+        GRACE,
+        Some(STAKE),
+    );
+    assert!(
+        reason.contains("The sink payout account must be an existing account")
+            || reason.to_lowercase().contains("not found")
+            || reason.to_lowercase().contains("does not exist")
+            || reason.to_lowercase().contains("substate"),
+        "unexpected reject: {reason}"
+    );
+}
+
+#[test]
+fn a_non_account_sink_is_rejected() {
+    let (mut test, coin, staker, referee, _sink) = fresh();
+    // The TestCoin component exists, but it is not an Account and cannot
+    // receive a deposit. This is the "typo that will never be creatable" case.
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        staker.account,
+        coin,
+        DEADLINE,
+        GRACE,
+        Some(STAKE),
+    );
+    assert!(
+        reason.contains("The sink payout account must be an existing account that can receive a deposit"),
+        "unexpected reject: {reason}"
+    );
+}
+
+#[test]
+fn a_non_account_staker_refund_is_rejected() {
+    let (mut test, coin, staker, referee, sink) = fresh();
+    let reason = open_reject(
+        &mut test,
+        coin,
+        &staker,
+        &referee,
+        coin,
+        sink.account,
+        DEADLINE,
+        GRACE,
+        Some(STAKE),
+    );
+    assert!(
+        reason.contains("The staker refund account must be an existing account that can receive a deposit"),
+        "unexpected reject: {reason}"
+    );
+}
+
+#[test]
+fn grace_of_zero_times_out_at_the_deadline() {
+    // timeout_at == deadline; the referee may rule only before that epoch.
+    let mut w = world_at(true, START, DEADLINE, 0, STAKE, GOAL);
+    let timeout_at: u64 = w.test.call_method(w.stake, "timeout_at", args![], vec![]);
+    assert_eq!(timeout_at, DEADLINE);
+
+    set_epoch(&mut w.test, DEADLINE - 1);
+    call(&mut w, "rule_success", Who::Referee).expect("referee may rule before the deadline");
+    // Reset with a fresh stake to test the timeout side.
+    let mut w = world_at(true, START, DEADLINE, 0, STAKE, GOAL);
+    set_epoch(&mut w.test, DEADLINE);
+    expect_err(
+        call(&mut w, "rule_success", Who::Referee),
+        "The ruling window has closed",
+    );
+    call(&mut w, "timeout", Who::Stranger).expect("timeout at the deadline");
+    assert_eq!(status(&mut w), "timed_out");
+    assert_eq!(balance(&mut w, Who::Staker), Amount::from(STAKE));
+    assert_eq!(pot(&mut w), Amount::zero());
 }
